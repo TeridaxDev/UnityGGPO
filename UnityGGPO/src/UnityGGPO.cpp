@@ -10,7 +10,7 @@
 
 constexpr auto PLUGIN_VERSION = "1.0.0.0";
 constexpr auto PLUGIN_BUILD_NUMBER = 1;
-int logLevel = 1; // 0 == nothing // 1 == important things // 2 == verbose // 3 == everything
+int logLevel = 3; // 0 == nothing // 1 == important things // 2 == verbose // 3 == everything
 
 const int LOG_TESTS = 0;
 const int LOG_INFO = 1;
@@ -107,6 +107,7 @@ void TestAllDelegates(const GGPOSessionCallbacks& cb) {
 }
 
 PLUGINEX(int) UggTestStartSession(GGPOPtr& sessionRef,
+    SteamManagerPtr& connection_manager,
     BeginGameDelegate beginGame,
     AdvanceFrameDelegate advanceFrame,
     LoadGameStateDelegate loadGameState,
@@ -114,9 +115,11 @@ PLUGINEX(int) UggTestStartSession(GGPOPtr& sessionRef,
     SaveGameStateDelegate saveGameState,
     FreeBufferDelegate freeBuffer,
     OnEventDelegate onEvent,
-    const char* game, int num_players, int localport)
+    SendToDelegate sendTo,
+    RecvFromDelegate recvFrom,
+    const char* game, int num_players)
 {
-    UggCallLogv(LOG_TESTS, "UggTestStartSession - %s %i %i", game, num_players, localport);
+    UggCallLogv(LOG_TESTS, "UggTestStartSession - %s %i", game, num_players);
     GGPOSessionCallbacks cb;
     cb.advance_frame = advanceFrame;
     cb.load_game_state = loadGameState;
@@ -129,12 +132,16 @@ PLUGINEX(int) UggTestStartSession(GGPOPtr& sessionRef,
 
     TestAllDelegates(cb);
     GGPOSession* ggpo;
-    auto ret = ggpo_start_session(&ggpo, &cb, game, num_players, sizeof(uint64_t), localport);
+    SteamConnection* connectionManager = new SteamConnection();
+    connectionManager->GivePointers(sendTo, recvFrom);
+    auto ret = ggpo_start_session(&ggpo, &cb, connectionManager, game, num_players, sizeof(uint64_t));
     sessionRef = (GGPOPtr)ggpo;
+    connection_manager = (SteamManagerPtr)connectionManager;
     return ret;
 }
 
 PLUGINEX(int) UggStartSession(GGPOPtr& sessionRef,
+    SteamManagerPtr& connection_manager,
     BeginGameDelegate beginGame,
     AdvanceFrameDelegate advanceFrame,
     LoadGameStateDelegate loadGameState,
@@ -142,9 +149,11 @@ PLUGINEX(int) UggStartSession(GGPOPtr& sessionRef,
     SaveGameStateDelegate saveGameState,
     FreeBufferDelegate freeBuffer,
     OnEventDelegate onEvent,
-    const char* game, int num_players, int localport)
+    SendToDelegate sendTo,
+    RecvFromDelegate recvFrom,
+    const char* game, int num_players)
 {
-    UggCallLogv(LOG_INFO, "UggStartSession - %s %i %i", game, num_players, localport);
+    UggCallLogv(LOG_INFO, "UggStartSession - %s %i", game, num_players);
     GGPOSessionCallbacks cb;
     cb.advance_frame = advanceFrame;
     cb.load_game_state = loadGameState;
@@ -156,12 +165,16 @@ PLUGINEX(int) UggStartSession(GGPOPtr& sessionRef,
     cb.on_event = onEvent;
 
     GGPOSession* ggpo;
-    auto ret = ggpo_start_session(&ggpo, &cb, game, num_players, sizeof(uint64_t), localport);
+    SteamConnection* connectionManager = new SteamConnection();
+    connectionManager->GivePointers(sendTo, recvFrom);
+    auto ret = ggpo_start_session(&ggpo, &cb, connectionManager, game, num_players, sizeof(uint64_t));
     sessionRef = (GGPOPtr)ggpo;
+    connection_manager = (SteamManagerPtr)connectionManager;
     return ret;
 }
 
 PLUGINEX(int) UggStartSpectating(GGPOPtr& sessionRef,
+    SteamManagerPtr& connection_manager,
     BeginGameDelegate beginGame,
     AdvanceFrameDelegate advanceFrame,
     LoadGameStateDelegate loadGameState,
@@ -169,9 +182,11 @@ PLUGINEX(int) UggStartSpectating(GGPOPtr& sessionRef,
     SaveGameStateDelegate saveGameState,
     FreeBufferDelegate freeBuffer,
     OnEventDelegate onEvent,
-    const char* game, int num_players, int localport, char* host_ip, int host_port)
+    SendToDelegate sendTo,
+    RecvFromDelegate recvFrom,
+    const char* game, int num_players, int connectionID)
 {
-    UggCallLogv(LOG_INFO, "UggStartSpectating - %s %i %i %s %i", game, num_players, localport, host_ip, host_port);
+    UggCallLogv(LOG_INFO, "UggStartSpectating - %s %i %i", game, num_players, connectionID);
     GGPOSessionCallbacks cb;
     cb.advance_frame = advanceFrame;
     cb.load_game_state = loadGameState;
@@ -183,7 +198,11 @@ PLUGINEX(int) UggStartSpectating(GGPOPtr& sessionRef,
     cb.on_event = onEvent;
 
     GGPOSession* ggpo;
-    auto ret = ggpo_start_spectating(&ggpo, &cb, game, num_players, sizeof(uint64_t), localport, host_ip, host_port);
+    SteamConnection* connectionManager = new SteamConnection();
+    connectionManager->GivePointers(sendTo, recvFrom);
+    auto ret = ggpo_start_spectating(&ggpo, &cb, connectionManager, game, num_players, sizeof(uint64_t), connectionID);
+    sessionRef = (GGPOPtr)ggpo;
+    connection_manager = (SteamManagerPtr)connectionManager;
     return ret;
 }
 
@@ -211,9 +230,10 @@ PLUGINEX(int) UggAddLocalInput(GGPOPtr ggpo, int local_player_handle, uint64_t i
     return ggpo_add_local_input((GGPOSession*)ggpo, local_player_handle, &input, sizeof(uint64_t));
 }
 
-PLUGINEX(int) UggCloseSession(GGPOPtr ggpo)
+PLUGINEX(int) UggCloseSession(GGPOPtr ggpo, SteamManagerPtr steam)
 {
     UggCallLog(LOG_INFO, "UggCloseSession");
+    delete ((SteamConnection*)steam);
     return ggpo_close_session((GGPOSession*)ggpo);
 }
 
@@ -226,17 +246,15 @@ PLUGINEX(int) UggIdle(GGPOPtr ggpo, int timeout)
 PLUGINEX(int) UggAddPlayer(GGPOPtr ggpo,
     int player_type,
     int player_num,
-    const char* player_ip_address,
-    unsigned short player_port,
+    int player_connection_ID,
     int& phandle)
 {
-    UggCallLogv(LOG_INFO, "UggAddPlayer %d %d %s %d", player_type, player_num, player_ip_address, player_port);
+    UggCallLogv(LOG_INFO, "UggAddPlayer %d %d %d", player_type, player_num, player_connection_ID);
     GGPOPlayer player;
     player.size = sizeof(GGPOPlayer);
     player.type = (GGPOPlayerType)player_type;
     player.player_num = player_num;
-    strcpy_s(player.u.remote.ip_address, player_ip_address);
-    player.u.remote.port = player_port;
+    player.u.remote.connection_id = player_connection_ID;
     return ggpo_add_player((GGPOSession*)ggpo, &player, &phandle);
 }
 
@@ -283,3 +301,10 @@ PLUGINEX(int) UggGetNetworkStats(GGPOPtr ggpo, int phandle,
     remote_frames_behind = stats.timesync.remote_frames_behind;
     return result;
 }
+
+PLUGINEX(int) HmmAddConnection(SteamManagerPtr steam,  int steamID)
+{
+    return ggpo_add_connection_steam((SteamConnection*)steam, steamID);
+}
+
+

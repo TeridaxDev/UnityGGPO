@@ -13,10 +13,14 @@ extern "C" {
 	typedef void (*FreeBufferDelegate)(void* buffer);
 	typedef bool (*OnEventDelegate)(GGPOEvent* info);
 	typedef intptr_t GGPOPtr;
+	typedef intptr_t SteamManagerPtr;
+	typedef int (*SendToDelegate)(char* buffer, int len, int flags, int connection_id);
+	typedef int (*RecvFromDelegate)(char** buffer, int len, int flags, int* connection_id);
 
 	PLUGINEX(const char*) UggPluginVersion();
 	PLUGINEX(int) UggPluginBuildNumber();
 	PLUGINEX(int) UggTestStartSession(GGPOPtr& sessionRef,
+		SteamManagerPtr& connection_manager,
 		BeginGameDelegate beginGame,
 		AdvanceFrameDelegate advanceFrame,
 		LoadGameStateDelegate loadGameState,
@@ -24,9 +28,12 @@ extern "C" {
 		SaveGameStateDelegate saveGameState,
 		FreeBufferDelegate freeBuffer,
 		OnEventDelegate onEvent,
-		const char* game, int num_players, int localport);
+		SendToDelegate sendTo,
+		RecvFromDelegate recvFrom,
+		const char* game, int num_players);
 	PLUGINEX(void) UggSetLogDelegate(LogDelegate callback);
 	PLUGINEX(int) UggStartSession(GGPOPtr& sessionRef,
+		SteamManagerPtr& connection_manager,
 		BeginGameDelegate beginGame,
 		AdvanceFrameDelegate advanceFrame,
 		LoadGameStateDelegate loadGameState,
@@ -34,8 +41,11 @@ extern "C" {
 		SaveGameStateDelegate saveGameState,
 		FreeBufferDelegate freeBuffer,
 		OnEventDelegate onEvent,
-		const char* game, int num_players, int localport);
+		SendToDelegate sendTo,
+		RecvFromDelegate recvFrom,
+		const char* game, int num_players);
 	PLUGINEX(int) UggStartSpectating(GGPOPtr& sessionRef,
+		SteamManagerPtr& connection_manager,
 		BeginGameDelegate beginGame,
 		AdvanceFrameDelegate advanceFrame,
 		LoadGameStateDelegate loadGameState,
@@ -43,18 +53,19 @@ extern "C" {
 		SaveGameStateDelegate saveGameState,
 		FreeBufferDelegate freeBuffer,
 		OnEventDelegate onEvent,
-		const char* game, int num_players, int localport, char* host_ip, int host_port);
+		SendToDelegate sendTo,
+		RecvFromDelegate recvFrom,
+		const char* game, int num_players, int connectionID);
 	PLUGINEX(int) UggSetDisconnectNotifyStart(GGPOPtr ggpo, int timeout);
 	PLUGINEX(int) UggSetDisconnectTimeout(GGPOPtr ggpo, int timeout);
 	PLUGINEX(int) UggSynchronizeInput(GGPOPtr ggpo, uint64_t* inputs, int length, int& disconnect_flags);
 	PLUGINEX(int) UggAddLocalInput(GGPOPtr ggpo, int local_player_handle, uint64_t input);
-	PLUGINEX(int) UggCloseSession(GGPOPtr ggpo);
+	PLUGINEX(int) UggCloseSession(GGPOPtr ggpo, SteamManagerPtr steam);
 	PLUGINEX(int) UggIdle(GGPOPtr ggpo, int timeout);
 	PLUGINEX(int) UggAddPlayer(GGPOPtr ggpo,
 		int player_type,
 		int player_num,
-		const char* player_ip_address,
-		unsigned short player_port,
+		int player_connection_ID,
 		int& phandle);
 	PLUGINEX(int) UggDisconnectPlayer(GGPOPtr ggpo, int phandle);
 	PLUGINEX(int) UggSetFrameDelay(GGPOPtr ggpo, int phandle, int frame_delay);
@@ -67,4 +78,5 @@ extern "C" {
 		int& kbps_sent,
 		int& local_frames_behind,
 		int& remote_frames_behind);
+	PLUGINEX(int) HmmAddConnection(SteamManagerPtr steam, int steamID);
 }
